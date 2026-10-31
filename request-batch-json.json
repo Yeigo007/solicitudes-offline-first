@@ -1,0 +1,5 @@
+{
+  "name": "Lote JSON",
+  "payload": "{\"producto\":\"Laptop\",\"precio\":2500}",
+  "type": "JSON"
+}
