@@ -59,3 +59,17 @@ Solicitudes/
 |---|---|
 | Domain | Entidades, reglas de negocio y enumeraciones. |
 | Application | Casos de uso, valid
+
+
+**Como probar**
+levantar backend
+dotnet run --project Solicitudes.Api --urls http://localhost:5000
+
+levantar frontEnd
+npm run buid
+npm run dev
+http://localhost:5173/
+
+BBDD
+solucitudesDB
+
