@@ -14,7 +14,10 @@ import { groupActionService } from './features/groups/services/group.action.serv
 import type { LocalRequest } from './features/requests/types/request.types';
 import type { GroupTreeNode } from './features/groups/types/group.types';
 
-// Propiedades del componente de grupos
+import './App.css';
+
+type RequestTypeOption = 'TEXT' | 'JSON';
+
 interface GroupNodeProps {
   group: GroupTreeNode;
   onRename: (id: number, name: string) => void;
@@ -23,7 +26,6 @@ interface GroupNodeProps {
   onProcess: (id: number) => void;
 }
 
-// Componente recursivo para representar grupos y subgrupos
 function GroupNode({
   group,
   onRename,
@@ -32,79 +34,83 @@ function GroupNode({
   onProcess
 }: GroupNodeProps) {
   return (
-    <div
-      style={{
-        border: '1px solid #ccc',
-        borderRadius: '6px',
-        padding: '12px',
-        marginBottom: '10px',
-        marginLeft: '20px'
-      }}
-    >
-      <strong>{group.name}</strong>
+    <div className="group-node">
+      <div className="group-heading">
+        <div>
+          <span className="eyebrow">GRUPO</span>
+          <strong>{group.name}</strong>
+        </div>
+        <span className="count-pill">
+          {group.totalRequestCount} solicitudes
+        </span>
+      </div>
 
-      <p>
-        Solicitudes directas: {group.directRequestCount}
-      </p>
+      <div className="group-meta">
+        <span>
+          Solicitudes directas: <strong>{group.directRequestCount}</strong>
+        </span>
+        <span>
+          Total con subgrupos: <strong>{group.totalRequestCount}</strong>
+        </span>
+      </div>
 
-      <p>
-        Total incluyendo subgrupos:{' '}
-        <strong>{group.totalRequestCount}</strong>
-      </p>
+      <div className="group-actions">
+        <button
+          type="button"
+          className="button button-light"
+          onClick={() => {
+            const newName = window.prompt(
+              'Nuevo nombre del grupo:',
+              group.name
+            );
 
-      <button
-        onClick={() => {
-          const newName = window.prompt(
-            'Nuevo nombre del grupo:',
-            group.name
-          );
+            if (newName?.trim() && group.localId !== undefined) {
+              onRename(group.localId, newName);
+            }
+          }}
+        >
+          Renombrar
+        </button>
 
-          if (newName?.trim() && group.localId !== undefined) {
-            onRename(group.localId, newName);
-          }
-        }}
-      >
-        Renombrar
-      </button>
+        <button
+          type="button"
+          className="button button-danger-light"
+          onClick={() => {
+            if (group.localId !== undefined) {
+              onDelete(group.localId);
+            }
+          }}
+        >
+          Eliminar
+        </button>
 
-      {' '}
+        <button
+          type="button"
+          className="button button-light"
+          onClick={() => {
+            if (group.localId !== undefined) {
+              onSync(group.localId);
+            }
+          }}
+        >
+          Sincronizar grupo
+        </button>
 
-      <button
-        onClick={() => {
-          if (group.localId !== undefined) {
-            onDelete(group.localId);
-          }
-        }}
-      >
-        Eliminar
-      </button>
-
-      <br /><br />
-
-      <button
-        onClick={() => {
-          if (group.localId !== undefined) {
-            onSync(group.localId);
-          }
-        }}
-      >
-        Sincronizar grupo
-      </button>
-
-      {' '}
-
-      <button
-        onClick={() => {
-          if (group.localId !== undefined) {
-            onProcess(group.localId);
-          }
-        }}
-      >
-        Procesar grupo
-      </button>
+        <button
+          type="button"
+          className="button button-success-light"
+          onClick={() => {
+            if (group.localId !== undefined) {
+              onProcess(group.localId);
+            }
+          }}
+        >
+          Procesar grupo
+        </button>
+      </div>
 
       {group.children.length > 0 && (
-        <div style={{ marginTop: '12px' }}>
+        <div className="group-children">
           {group.children.map(child => (
             <GroupNode
               key={child.localId}
@@ -127,6 +133,8 @@ function App() {
 
   const [name, setName] = useState('');
   const [payload, setPayload] = useState('');
+  const [requestType, setRequestType] =
+    useState<RequestTypeOption>('TEXT');
 
   const [groupName, setGroupName] = useState('');
   const [parentGroupId, setParentGroupId] = useState('');
@@ -148,17 +156,33 @@ function App() {
   // Crear solicitud local
   async function createRequest() {
     if (!name.trim() || !payload.trim()) {
-      alert('Completa todos los campos');
+      window.alert('Completa el nombre y el contenido de la solicitud.');
       return;
     }
 
+    // Validar JSON antes de guardarlo localmente
+    if (requestType === 'JSON') {
+      try {
+        JSON.parse(payload);
+      } catch {
+        window.alert('El contenido no es un JSON válido.');
+        return;
+      }
+    }
+
     try {
-      await requestLocalService.create(name, payload, 'TEXT');
+      await requestLocalService.create(
+        name.trim(),
+        payload,
+        requestType
+      );
 
       setName('');
       setPayload('');
+      setRequestType('TEXT');
 
       await loadData();
+
       setSyncMessage('Solicitud guardada localmente.');
     } catch (error) {
       console.error('Error creando solicitud:', error);
@@ -169,7 +193,7 @@ function App() {
   // Crear grupo o subgrupo
   async function createGroup() {
     if (!groupName.trim()) {
-      alert('Escribe el nombre del grupo');
+      window.alert('Escribe el nombre del grupo.');
       return;
     }
 
@@ -337,7 +361,7 @@ function App() {
     }
   }
 
-  // Sincronizar solamente un grupo y todos sus descendientes
+  // Sincronizar un grupo y todos sus descendientes
   async function synchronizeGroup(groupId: number) {
     try {
       const result =
@@ -360,7 +384,7 @@ function App() {
     }
   }
 
-  // Procesar solamente un grupo y todos sus descendientes
+  // Procesar un grupo y todos sus descendientes
   async function processGroup(groupId: number) {
     try {
       const result =
@@ -413,186 +437,212 @@ function App() {
 
   const allGroups = flattenGroups(groups);
 
+  function getStatusLabel(status: string) {
+    switch (status) {
+      case 'PENDING':
+        return 'Pendiente';
+      case 'SYNCED':
+        return 'Sincronizada';
+      case 'FAILED':
+        return 'Fallida';
+      default:
+        return status;
+    }
+  }
+
   return (
-    <main style={{ padding: '30px', fontFamily: 'Arial' }}>
-      <h1>Gestión de solicitudes</h1>
+    <main className="app-shell">
+
+      {/* ENCABEZADO */}
+      <header className="app-header">
+        <div>
+          <span className="eyebrow">PLATAFORMA DE GESTIÓN</span>
+          <h1>Gestión de solicitudes</h1>
+          <p>
+            Administración, procesamiento y sincronización offline-first
+          </p>
+        </div>
+
+        <span className="header-tag">
+          Sistema Offline-First
+        </span>
+      </header>
 
       {/* CREACIÓN DE SOLICITUDES */}
-      <section>
-        <h2>Nueva solicitud</h2>
-
-        <input
-          placeholder="Nombre"
-          value={name}
-          onChange={event => setName(event.target.value)}
-        />
-
-        <br /><br />
-
-        <textarea
-          placeholder="Contenido"
-          value={payload}
-          onChange={event => setPayload(event.target.value)}
-        />
-
-        <br /><br />
-
-        <button onClick={() => void createRequest()}>
-          Guardar localmente
-        </button>
-      </section>
-
-      <hr />
-
-      {/* ADMINISTRACIÓN DE GRUPOS */}
-      <section>
-        <h2>Grupos y subgrupos</h2>
-
-        <h3>Crear grupo</h3>
-
-        <input
-          placeholder="Nombre del grupo"
-          value={groupName}
-          onChange={event => setGroupName(event.target.value)}
-        />
-
-        <br /><br />
-
-        <label>Grupo padre:</label>
-
-        <br />
-
-        <select
-          value={parentGroupId}
-          onChange={event => setParentGroupId(event.target.value)}
-        >
-          <option value="">
-            Crear como grupo principal
-          </option>
-
-          {allGroups.map(group => (
-            <option
-              key={group.localId}
-              value={group.localId}
-            >
-              {group.name}
-            </option>
-          ))}
-        </select>
-
-        <br /><br />
-
-        <button onClick={() => void createGroup()}>
-          Crear grupo
-        </button>
-
-        <h3>Estructura de grupos</h3>
-
-        {groups.length === 0 ? (
-          <p>No existen grupos registrados.</p>
-        ) : (
-          groups.map(group => (
-            <GroupNode
-              key={group.localId}
-              group={group}
-              onRename={(id, newName) => {
-                void renameGroup(id, newName);
-              }}
-              onDelete={id => {
-                void deleteGroup(id);
-              }}
-              onSync={id => {
-                void synchronizeGroup(id);
-              }}
-              onProcess={id => {
-                void processGroup(id);
-              }}
-            />
-          ))
-        )}
-      </section>
-
-      <hr />
-
-      {/* SINCRONIZACIÓN GENERAL */}
-      <section>
-        <h2>Estado de sincronización</h2>
-
-        <p>Solicitudes pendientes: {pendingCount}</p>
-        <p>Solicitudes sincronizadas: {syncedCount}</p>
-        <p>Solicitudes fallidas: {failedCount}</p>
-
-        <button
-          onClick={() => void synchronizeRequests()}
-          disabled={isSyncing || pendingCount === 0}
-        >
-          {isSyncing ? 'Sincronizando...' : 'Sincronizar todas'}
-        </button>
-
-        <br /><br />
-
-        <button onClick={() => void refreshServerStatuses()}>
-          Actualizar estados del servidor
-        </button>
-
-        <br /><br />
-
-        <button onClick={() => void processPendingRequests()}>
-          Procesar todas las pendientes
-        </button>
-
-        {syncMessage && (
-          <p role="status">{syncMessage}</p>
-        )}
-      </section>
-
-      <hr />
-
-      {/* LISTADO DE SOLICITUDES */}
-      <section>
-        <h2>Solicitudes guardadas: {requests.length}</h2>
-
-        {requests.map(request => (
-          <article
-            key={request.localId}
-            style={{
-              border: '1px solid #ccc',
-              borderRadius: '6px',
-              padding: '12px',
-              marginBottom: '10px'
-            }}
-          >
-            <strong>{request.name}</strong>
-
-            <p>{request.payload}</p>
-
-            <p>
-              Sincronización:{' '}
-              <strong>{request.syncStatus}</strong>
+      <section className="section-card">
+        <div className="section-title">
+          <div>
+            <h2>Nueva solicitud</h2>
+            <p className="section-description">
+              Registra solicitudes localmente y sincronízalas cuando tengas conexión.
             </p>
+          </div>
+        </div>
 
-            {request.serverId && (
-              <small>ID servidor: {request.serverId}</small>
-            )}
+        <div className="form-grid">
+          <div className="form-group">
+            <label htmlFor="request-name">
+              Nombre de la solicitud
+            </label>
 
-            <br /><br />
+            <input
+              id="request-name"
+              placeholder="Ej. Actualización de información"
+              value={name}
+              onChange={event => setName(event.target.value)}
+            />
+          </div>
 
-            <label>Grupo asignado:</label>
-
-            <br />
+          <div className="form-group">
+            <label htmlFor="request-type">
+              Tipo de solicitud
+            </label>
 
             <select
-              value={request.groupId ?? ''}
-              onChange={event => {
-                if (request.localId !== undefined) {
-                  void assignRequest(
-                    request.localId,
-                    event.target.value
-                  );
-                }
-              }}
+              id="request-type"
+              value={requestType}
+              onChange={event =>
+                setRequestType(event.target.value as RequestTypeOption)
+              }
             >
-              <option value="">Sin grupo</option>
+              <option value="TEXT">Texto (TEXT)</option>
+              <option value="JSON">Estructura JSON</option>
+            </select>
+          </div>
+
+          <div className="form-group full">
+            <label htmlFor="request-payload">
+              Contenido
+            </label>
+
+            <textarea
+              id="request-payload"
+              placeholder={
+                requestType === 'JSON'
+                  ? '{\n  "nombre": "Carlos",\n  "edad": 30,\n  "activo": true\n}'
+                  : 'Escribe aquí el contenido de la solicitud...'
+              }
+              value={payload}
+              onChange={event => setPayload(event.target.value)}
+            />
+
+            <p className="subtle-text">
+              {requestType === 'JSON'
+                ? 'Se validará la estructura JSON antes de guardar.'
+                : 'El contenido se procesará en el backend según las reglas configuradas.'}
+            </p>
+          </div>
+        </div>
+
+        <button
+          type="button"
+          className="button button-primary"
+          onClick={() => void createRequest()}
+        >
+          + Guardar localmente
+        </button>
+      </section>
+
+      {/* SINCRONIZACIÓN GENERAL */}
+      <section className="section-card">
+        <div className="section-title">
+          <div>
+            <h2>Estado de sincronización</h2>
+            <p className="section-description">
+              Resumen del estado de tus solicitudes.
+            </p>
+          </div>
+        </div>
+
+        <div className="stats-grid">
+          <div className="stat-card pending">
+            <span>Solicitudes pendientes</span>
+            <strong>{pendingCount}</strong>
+          </div>
+
+          <div className="stat-card synced">
+            <span>Solicitudes sincronizadas</span>
+            <strong>{syncedCount}</strong>
+          </div>
+
+          <div className="stat-card failed">
+            <span>Solicitudes fallidas</span>
+            <strong>{failedCount}</strong>
+          </div>
+        </div>
+
+        <div className="actions-row">
+          <button
+            type="button"
+            className="button button-primary"
+            onClick={() => void synchronizeRequests()}
+            disabled={isSyncing || pendingCount === 0}
+          >
+            {isSyncing ? 'Sincronizando...' : 'Sincronizar todas'}
+          </button>
+
+          <button
+            type="button"
+            className="button"
+            onClick={() => void refreshServerStatuses()}
+          >
+            Actualizar estados del servidor
+          </button>
+
+          <button
+            type="button"
+            className="button button-success-light"
+            onClick={() => void processPendingRequests()}
+          >
+            Procesar todas las pendientes
+          </button>
+        </div>
+
+        {syncMessage && (
+          <p className="status-message" role="status">
+            {syncMessage}
+          </p>
+        )}
+      </section>
+
+      {/* ADMINISTRACIÓN DE GRUPOS */}
+      <section className="section-card">
+        <div className="section-title">
+          <div>
+            <h2>Grupos y subgrupos</h2>
+            <p className="section-description">
+              Organiza tus solicitudes en estructuras jerárquicas.
+            </p>
+          </div>
+        </div>
+
+        <div className="form-grid">
+          <div className="form-group">
+            <label htmlFor="group-name">
+              Nombre del grupo
+            </label>
+
+            <input
+              id="group-name"
+              placeholder="Ej. Solicitudes comerciales"
+              value={groupName}
+              onChange={event => setGroupName(event.target.value)}
+            />
+          </div>
+
+          <div className="form-group">
+            <label htmlFor="parent-group">
+              Grupo padre
+            </label>
+
+            <select
+              id="parent-group"
+              value={parentGroupId}
+              onChange={event => setParentGroupId(event.target.value)}
+            >
+              <option value="">
+                Crear como grupo principal
+              </option>
 
               {allGroups.map(group => (
                 <option
@@ -603,39 +653,189 @@ function App() {
                 </option>
               ))}
             </select>
+          </div>
+        </div>
 
-            <br /><br />
+        <button
+          type="button"
+          className="button button-primary"
+          onClick={() => void createGroup()}
+        >
+          + Crear grupo
+        </button>
 
-            {request.syncStatus === 'SYNCED' &&
-              request.serverStatus === 0 && (
-                <button
-                  onClick={() => {
-                    if (request.localId !== undefined) {
-                      void processRequest(request.localId);
-                    }
-                  }}
-                >
-                  Procesar solicitud
-                </button>
-              )}
+        <div className="groups-container">
+          <h3>Estructura de grupos</h3>
 
-            {request.serverStatus === 1 && (
-              <p>Procesada correctamente</p>
-            )}
-
-            {request.serverStatus === 2 && (
-              <p>El procesamiento falló</p>
-            )}
-
-            {request.processedPayload && (
-              <div>
-                <strong>Resultado del procesamiento:</strong>
-                <pre>{request.processedPayload}</pre>
-              </div>
-            )}
-          </article>
-        ))}
+          {groups.length === 0 ? (
+            <div className="empty-state">
+              No existen grupos registrados.
+              Crea uno para comenzar a organizar tus solicitudes.
+            </div>
+          ) : (
+            groups.map(group => (
+              <GroupNode
+                key={group.localId}
+                group={group}
+                onRename={(id, newName) => {
+                  void renameGroup(id, newName);
+                }}
+                onDelete={id => {
+                  void deleteGroup(id);
+                }}
+                onSync={id => {
+                  void synchronizeGroup(id);
+                }}
+                onProcess={id => {
+                  void processGroup(id);
+                }}
+              />
+            ))
+          )}
+        </div>
       </section>
+
+      {/* LISTADO DE SOLICITUDES */}
+      <section className="section-card">
+        <div className="section-title">
+          <div>
+            <h2>Solicitudes registradas</h2>
+            <p className="section-description">
+              Consulta el contenido y administra el estado de cada solicitud.
+            </p>
+          </div>
+
+          <span className="count-pill">
+            {requests.length} en total
+          </span>
+        </div>
+
+        {requests.length === 0 ? (
+          <div className="empty-state">
+            No hay solicitudes registradas.
+          </div>
+        ) : (
+          <div className="request-list">
+            {requests.map(request => (
+              <article
+                key={request.localId}
+                className="request-card"
+              >
+                <div className="request-top">
+                  <div>
+                    <span className="eyebrow">
+                      {request.type ?? 'SOLICITUD'}
+                    </span>
+
+                    <h3 className="request-name">
+                      {request.name}
+                    </h3>
+                  </div>
+
+                  <span
+                    className={`status-badge ${request.syncStatus.toLowerCase()}`}
+                  >
+                    {getStatusLabel(request.syncStatus)}
+                  </span>
+                </div>
+
+                <pre className="request-content">
+                  {request.payload}
+                </pre>
+
+                <div className="request-details">
+                  <span>
+                    Estado del servidor:{' '}
+                    <strong>
+                      {request.serverStatus === 0
+                        ? 'Pendiente'
+                        : request.serverStatus === 1
+                          ? 'Procesada'
+                          : request.serverStatus === 2
+                            ? 'Fallida'
+                            : 'No sincronizada'}
+                    </strong>
+                  </span>
+
+                  {request.serverId && (
+                    <span>
+                      ID servidor: <strong>{request.serverId}</strong>
+                    </span>
+                  )}
+                </div>
+
+                <div className="form-group group-select">
+                  <label htmlFor={`group-${request.localId}`}>
+                    Grupo asignado
+                  </label>
+
+                  <select
+                    id={`group-${request.localId}`}
+                    value={request.groupId ?? ''}
+                    onChange={event => {
+                      if (request.localId !== undefined) {
+                        void assignRequest(
+                          request.localId,
+                          event.target.value
+                        );
+                      }
+                    }}
+                  >
+                    <option value="">Sin grupo</option>
+
+                    {allGroups.map(group => (
+                      <option
+                        key={group.localId}
+                        value={group.localId}
+                      >
+                        {group.name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                {request.syncStatus === 'SYNCED' &&
+                  request.serverStatus === 0 && (
+                    <button
+                      type="button"
+                      className="button button-success-light"
+                      onClick={() => {
+                        if (request.localId !== undefined) {
+                          void processRequest(request.localId);
+                        }
+                      }}
+                    >
+                      Procesar solicitud
+                    </button>
+                  )}
+
+                {request.serverStatus === 1 && (
+                  <p className="result-success">
+                    Solicitud procesada correctamente.
+                  </p>
+                )}
+
+                {request.serverStatus === 2 && (
+                  <p className="result-error">
+                    El procesamiento de esta solicitud falló.
+                  </p>
+                )}
+
+                {request.processedPayload && (
+                  <div className="server-result">
+                    <strong>Resultado del procesamiento</strong>
+                    <pre>{request.processedPayload}</pre>
+                  </div>
+                )}
+              </article>
+            ))}
+          </div>
+        )}
+      </section>
+
+      <footer className="app-footer">
+        Gestión de solicitudes · Arquitectura Offline-First
+      </footer>
     </main>
   );
 }
